@@ -7,7 +7,7 @@ function Compare-UpdateLastRun()
 			New-Item ~\.config -ItemType Directory -ErrorAction Stop | Out-Null
 		}
 		
-		if (Test-Path ~\.config\lastrun.txt)
+		if (-not(Test-Path ~\.config\lastrun.txt))
 		{
 			New-Item ~\.config\lastrun.txt -ItemType File -ErrorAction Stop | Out-Null
 			(Get-Date).AddDays(-1).ToString("yyyy-MM-dd") | Set-Content ~\.config\lastrun.txt
