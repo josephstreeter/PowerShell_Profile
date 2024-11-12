@@ -6,13 +6,13 @@ function Compare-UpdateLastRun()
 		{
 			New-Item ~\.config -ItemType Directory -ErrorAction Stop | Out-Null
 		}
-		
+
 		if (-not(Test-Path ~\.config\lastrun.txt))
 		{
 			New-Item ~\.config\lastrun.txt -ItemType File -ErrorAction Stop | Out-Null
 			(Get-Date).AddDays(-1).ToString("yyyy-MM-dd") | Set-Content ~\.config\lastrun.txt
 		}
-		
+
 	}
 	catch
 	{
@@ -23,15 +23,15 @@ function Compare-UpdateLastRun()
 	try
 	{
 		$lastrun = Get-Content ~\.config\lastrun.txt
-	  
+
 		if (((Get-Date $lastrun).ToString("yyyy-MM-dd") -eq (Get-Date).ToString("yyyy-MM-dd")) -eq $true)
 		{
-			#Write-Output "Skipping update check, last run was $lastrun"
+			Write-Output "Skipping update check, last run was $lastrun"
 			Return $true
 		}
 		else
 		{
-			#Write-Output "Checking for updates, last run was $lastrun"
+			Write-Output "Checking for updates, last run was $lastrun"
 			(Get-Date).ToString("yyyy-MM-dd") | Set-Content ~\.config\lastrun.txt
 			Return $false
 		}
@@ -53,20 +53,21 @@ function Search-WingetUpdates()
 	{
 		if (-not (Get-Module microsoft.winget.client -ListAvailable))
 		{
+			Write-Output "Installing WinGet PowerShell module...."
 			Install-Module microsoft.winget.client -Repository PSGallery -Force
 		}
-  
+
 		Write-Output "Checking for WinGet updates...."
-    
+
 		$Updates = Get-WinGetPackage | Where-Object { $Apps -contains $_.id -and $_.IsUpdateAvailable }
-    
+
 		if ($Updates.count -eq 0)
 		{
 			Write-Output "No WinGet updates available"
 			Return
 		}
-    
-		Write-Warning -Message "Updates available for $($Updates.id -join ", ")`nRun 'winget upgrade $($Updates.id -join ", ")' to install updates"
+
+		$Updates | ForEach-Object { Write-Output ("Updates available for $($_.id -join ", ")`nRun 'winget upgrade $($_.id -join ", ")' to install updates") }
 		Return
 	}
 	catch
@@ -113,7 +114,7 @@ function Search-ModuleUpdate()
 	try
 	{
 		Write-Output "Checking for PowerShell module updates...."
-  
+
 		$Updates = @()
 		foreach ($Module in $Modules)
 		{
@@ -125,13 +126,13 @@ function Search-ModuleUpdate()
 				$Updates += $Module
 			}
 		}
-  
+
 		if ($Updates.count -eq 0)
 		{
 			Write-Output "Modules are up to date"
 			Return
 		}
-  
+
 		Write-Warning -Message "Updates available for $($Updates -join ", ")`nRun 'Update-Module $($Updates -join ", ")' to install updates"
 	}
 	catch
@@ -190,19 +191,30 @@ function Initialize-OhMyPosh()
 	(
 		[Parameter(Mandatory = $true)][string]$ConfigFile
 	)
-  
-	if (Get-WinGetPackage JanDeDobbeleer.OhMyPosh)
+
+	try
 	{
-		Write-Output "Oh My Posh is already installed"
+		if (-not(Get-WinGetPackage JanDeDobbeleer.OhMyPosh))
+		{
+			Install-WinGetPackage -Id JanDeDobbeleer.OhMyPosh -Source winget -Force
+		}
 	}
-	else
+	catch
 	{
-		Install-WinGetPackage -Id JanDeDobbeleer.OhMyPosh -Source winget -Force
+		Write-Error -Message ("Failed to install Oh My Posh: {0}" -f $_.Exception.Message)
+		Return
 	}
-  
-	Write-Output "Initializing Oh My Posh...."
-  
-	oh-my-posh --init --shell pwsh --config $ConfigFile | Invoke-Expression
+	
+	try
+ 	{
+	 Write-Output "Initializing Oh My Posh...."
+	 oh-my-posh --init --shell pwsh --config $ConfigFile | Invoke-Expression	
+	}
+	catch
+	{
+		Write-Error -Message ("Failed to initialize oh-my-posh: {0}" -f $_.Exception.Message)
+	}
+	
 }
 
 function Initialize-PSReadLine()
@@ -214,9 +226,10 @@ function Initialize-PSReadLine()
 	{
 		if (-not (Get-Module PSReadLine -ListAvailable))
 		{
+			Write-Output "Installing PSReadLine...."
 			Install-Module PSReadLine -Repository PSGallery -Force
 		}
-  
+
 		Write-Output "Initializing PSReadLine...."
 
 		$Params = @{
@@ -224,7 +237,7 @@ function Initialize-PSReadLine()
 			PredictionSource    = "History"
 			PredictionViewStyle = "Listview"
 		}
-  
+
 		Set-PSReadLineOption @Params -ErrorAction Stop
 	}
 	catch
@@ -237,28 +250,25 @@ function Initialize-PSReadLine()
 
 $SkipUpdates = Compare-UpdateLastRun
 
-if ($SkipUpdates -eq $true)
-{
-	Write-Output "Skipping update check"
-}
-else
+if ($SkipUpdates -eq $false)
 {
 	# Manage WinGet Apps
-	$Apps = "Microsoft.WindowsTerminal", "Git.Git", "Microsoft.PowerShell", "Microsoft.VisualStudioCode", "JanDeDobbeleer.OhMyPosh"
+	$Apps = "Microsoft.WindowsTerminal", "Git.Git", "Microsoft.PowerShell", "Microsoft.VisualStudioCode", "JanDeDobbeleer.OhMyPosh", "Microsoft.WindowsTerminal"
 	Search-WingetUpdates -Apps $Apps
-	
+
 	# Manage PowerShell Modules
 	$Modules = @(
 		[PSCustomObject]@{"Name" = "ExchangeOnlineManagement"; "PSRepository" = "PSGallery" }
 		[PSCustomObject]@{"Name" = "Microsoft.Graph"; "PSRepository" = "PSGallery" }
 		[PSCustomObject]@{"Name" = "PSReadLine"; "PSRepository" = "PSGallery" }
+		[PSCustomObject]@{"Name" = "MATC.TS.Exchange"; "PSRepository" = "MATC.TS" }
 	)
-	
+
 	Search-ModuleUpdate -Modules $Modules
 	Install-CommonModule -Modules $Modules
 }
 
-Import-LocalModule "C:\Users\JStreeter\source\repos\IAM_PowerShell_Modules\Exchange\PS-EX-Administration.psm1"
+#Import-LocalModule "C:\Users\JStreeter\source\repos\IAM_PowerShell_Modules\Exchange\PS-EX-Administration.psm1"
 
 # Initialize PowerShell Environment
 Set-CommonVariables
