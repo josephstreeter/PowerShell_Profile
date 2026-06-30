@@ -567,6 +567,66 @@ function Initialize-PSReadLine()
     }
 }
 
+function Connect-M365
+{
+    param(
+        [Parameter(Mandatory)]
+        [string]$UserPrincipalName
+	)
+
+    try
+    {
+        $graphContext = Get-MgContext -ErrorAction SilentlyContinue
+        if ($graphContext -and $graphContext.Account)
+        {
+            Write-Information "Microsoft Graph already connected as $($graphContext.Account)" -InformationAction Continue
+        }
+        else
+        {
+            Write-Information "Connecting to Microsoft Graph" -InformationAction Continue
+            Connect-MgGraph -NoWelcome
+            Write-Information "Connection to Microsoft Graph Successful" -InformationAction Continue
+        }
+    }
+    catch
+    {
+        Write-Error -Message ("Failed to connect to Microsoft Graph: {0}" -f $_.Exception.Message)
+    }
+    try
+    {
+        $exoConnected = $false
+        if (Get-Command Get-ConnectionInformation -ErrorAction SilentlyContinue)
+        {
+            $exoConnections = Get-ConnectionInformation -ErrorAction SilentlyContinue
+            if ($exoConnections)
+            {
+                $activeConnection = $exoConnections | Where-Object {
+                    $_.State -eq 'Connected' -and ($_.UserPrincipalName -eq $UserPrincipalName -or [string]::IsNullOrWhiteSpace($_.UserPrincipalName))
+                } | Select-Object -First 1
+
+                if ($activeConnection)
+                {
+                    $exoConnected = $true
+                }
+            }
+        }
+
+        if ($exoConnected)
+        {
+            Write-Information "Exchange Online already connected" -InformationAction Continue
+        }
+        else
+        {
+            Write-Information "Connecting to Microsoft Exchange Online" -InformationAction Continue
+            Connect-ExchangeOnline -UserPrincipalName $UserPrincipalName -ShowBanner:$false -ShowProgress:$false -DisableWAM
+            Write-Information "Connection to Microsoft Exchange Online Successful" -InformationAction Continue
+        }
+    }
+    catch
+    {
+        Write-Error -Message ("Failed to connect to Microsoft Exchange: {0}" -f $_.Exception.Message)
+    }
+}
 # End Functions ############################################################################################################
 
 try
